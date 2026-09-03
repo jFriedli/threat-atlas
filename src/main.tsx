@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
-import './milestones.css'
+document.documentElement.dataset.theme=localStorage.getItem('ta-theme')==='light'?'light':'dark';import './milestones.css'
 import './snapshots.css'
 import './interaction.css'
 
