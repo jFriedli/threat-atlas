@@ -1,0 +1,7 @@
+import { openDB } from 'idb'; import type { ThreatModel } from './domain'; import { modelSchema } from './domain'
+const dbp=()=>openDB('threat-atlas',1,{upgrade(db){if(!db.objectStoreNames.contains('models'))db.createObjectStore('models',{keyPath:'id'})}})
+export async function listModels():Promise<ThreatModel[]>{const rows=await (await dbp()).getAll('models');return rows.flatMap(r=>{const p=modelSchema.safeParse(r);return p.success?[p.data]:[]}).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))}
+export async function saveModel(m:ThreatModel){await (await dbp()).put('models',m)}
+export async function removeModel(id:string){await (await dbp()).delete('models',id)}
+export async function loadModel(id:string){const v=await (await dbp()).get('models',id);const p=modelSchema.safeParse(v);return p.success?p.data:null}
+export function parseModel(value:unknown):ThreatModel{const p=modelSchema.safeParse(value);if(!p.success)throw new Error(p.error.issues.slice(0,4).map(x=>`${x.path.join('.')}: ${x.message}`).join('\n'));const ids=new Set<string>();for(const n of p.data.nodes){if(ids.has(n.id))throw new Error(`Duplicate element ID: ${n.id}`);ids.add(n.id)}for(const e of p.data.edges){if(!ids.has(e.source)||!ids.has(e.target))throw new Error(`Data flow “${e.label||e.id}” has a missing endpoint`);if(ids.has(e.id))throw new Error(`Duplicate element ID: ${e.id}`);ids.add(e.id)}return p.data}
