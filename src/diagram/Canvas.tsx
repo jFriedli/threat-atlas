@@ -1,5 +1,427 @@
-import {useCallback,useEffect,useMemo,useRef,useState} from'react';import{ReactFlow,Background,Controls,MiniMap,MarkerType,SelectionMode,useReactFlow,type Connection,type Edge,type Node}from'@xyflow/react';import'@xyflow/react/dist/style.css';import{AtlasNodeView}from'./Nodes';import{FlowEdge}from'./FlowEdge';import{useStore}from'../state';import type{ElementType}from'../domain';import{Plus}from'lucide-react';
-const nodeTypes={atlas:AtlasNodeView},edgeTypes={flow:FlowEdge};type Menu={x:number;y:number;kind:'canvas'|'node'|'edge';id?:string;flow:{x:number;y:number}};
-export function Canvas(){const{model,selection,select,mutate,addNode,addEdge}=useStore(),wrap=useRef<HTMLDivElement>(null),lastEdgeClick=useRef<{id:string;at:number;x:number;y:number}|null>(null),[quick,setQuick]=useState<{x:number;y:number;flow:{x:number;y:number}}|null>(null),[menu,setMenu]=useState<Menu|null>(null),[selectedIds,setSelectedIds]=useState<string[]>([]),rf=useReactFlow();useEffect(()=>{let suppressDoubleClickUntil=0;const click=(event:MouseEvent)=>{if(event.button!==0)return;const target=event.target as Element;if(target.closest('.waypoint-svg-handle'))return;const label=target.closest('[data-edge-id]'),group=target.closest('.react-flow__edge'),previous=lastEdgeClick.current,now=performance.now();let id=label?.getAttribute('data-edge-id')||group?.getAttribute('data-testid')?.replace('rf__edge-','');const closeToPrevious=previous&&now-previous.at<=500&&Math.hypot(event.clientX-previous.x,event.clientY-previous.y)<=8;if(!id&&closeToPrevious&&target.closest('.react-flow__pane'))id=previous.id;if(!id){lastEdgeClick.current=null;return}lastEdgeClick.current={id,at:now,x:event.clientX,y:event.clientY};if(!previous||previous.id!==id||!closeToPrevious)return;event.preventDefault();event.stopPropagation();lastEdgeClick.current=null;suppressDoubleClickUntil=now+100;const point=rf.screenToFlowPosition({x:event.clientX,y:event.clientY});mutate(m=>{const edge=m.edges.find(x=>x.id===id);if(edge)edge.waypoints=[...(edge.waypoints||[]),point]});select({kind:'edge',id})};const doubleClick=(event:MouseEvent)=>{if(performance.now()<suppressDoubleClickUntil){event.preventDefault();event.stopPropagation()}};document.addEventListener('click',click,true);document.addEventListener('dblclick',doubleClick,true);return()=>{document.removeEventListener('click',click,true);document.removeEventListener('dblclick',doubleClick,true)}},[rf,mutate,select]);const nodes=useMemo<Node[]>(()=>model?.nodes.map(n=>({id:n.id,type:'atlas',className:`flow-node-${n.type}`,dragHandle:n.type==='boundary'?'.node-copy':undefined,position:n.position,width:n.size?.width,height:n.size?.height,style:{width:n.size?.width||(n.type==='boundary'?440:190),height:n.size?.height||(n.type==='boundary'?280:82)},data:{atlas:n,threats:model.threats.filter(t=>t.elementId===n.id)},selected:selection?.kind==='node'&&selection.id===n.id,zIndex:n.zIndex??(n.type==='boundary'?-10:1)}))||[],[model,selection]);const edges=useMemo<Edge[]>(()=>model?.edges.map(e=>{const danger=model.threats.some(t=>t.elementId===e.id&&t.status==='open'),active=selection?.kind==='edge'&&selection.id===e.id;return{id:e.id,source:e.source,target:e.target,label:e.label,type:'flow',data:{waypoints:e.waypoints||[],routing:e.routing,label:e.label},markerEnd:{type:MarkerType.ArrowClosed,color:active?'#2563eb':danger?'#dc2626':undefined},selected:active,style:{strokeWidth:active?3:danger?2.6:2,stroke:active?'#2563eb':danger?'#dc2626':undefined},labelStyle:{fontSize:12,fontWeight:600,fill:active?'#2563eb':danger?'#b91c1c':undefined}}})||[],[model,selection]);const connect=useCallback((c:Connection)=>{if(c.source&&c.target)addEdge(c.source,c.target)},[addEdge]);const context=(e:React.MouseEvent,kind:Menu['kind'],id?:string)=>{e.preventDefault();e.stopPropagation();if(id)select({kind:kind==='node'?'node':'edge',id});setMenu({x:e.clientX-(wrap.current?.getBoundingClientRect().left||0),y:e.clientY-(wrap.current?.getBoundingClientRect().top||0),flow:rf.screenToFlowPosition({x:e.clientX,y:e.clientY}),kind,id})};const align=(axis:string)=>{if(selectedIds.length<2)return;mutate(m=>{const ns=m.nodes.filter(n=>selectedIds.includes(n.id)),horizontal=axis==='left'||axis==='right';if(['left','right','top','bottom'].includes(axis)){const vals=ns.map(n=>horizontal?n.position.x+(axis==='right'?(n.size?.width||190):0):n.position.y+(axis==='bottom'?(n.size?.height||82):0)),v=axis==='left'||axis==='top'?Math.min(...vals):Math.max(...vals);ns.forEach(n=>{if(horizontal)n.position.x=v-(axis==='right'?(n.size?.width||190):0);else n.position.y=v-(axis==='bottom'?(n.size?.height||82):0)})}else{const h=axis==='hspace',sorted=[...ns].sort((a,b)=>(h?a.position.x:a.position.y)-(h?b.position.x:b.position.y)),first=h?sorted[0].position.x:sorted[0].position.y,last=h?sorted.at(-1)!.position.x:sorted.at(-1)!.position.y;sorted.forEach((n,i)=>{if(h)n.position.x=first+(last-first)*i/(sorted.length-1);else n.position.y=first+(last-first)*i/(sorted.length-1)})}})};
-return <div className="canvas" ref={wrap} onContextMenu={e=>context(e,'canvas')} onDoubleClick={e=>{if((e.target as HTMLElement).classList.contains('react-flow__pane'))setQuick({x:e.clientX,y:e.clientY,flow:rf.screenToFlowPosition({x:e.clientX,y:e.clientY})})}} onDrop={e=>{e.preventDefault();const t=e.dataTransfer.getData('atlas/type')as ElementType;if(t)addNode(t,rf.screenToFlowPosition({x:e.clientX,y:e.clientY}))}} onDragOver={e=>e.preventDefault()}><ReactFlow elevateNodesOnSelect={false} nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onConnect={connect} onSelectionChange={s=>setSelectedIds(old=>{const next=s.nodes.map(n=>n.id);return old.join('|')===next.join('|')?old:next})} onNodeContextMenu={(e,n)=>context(e,'node',n.id)} onEdgeContextMenu={(e,n)=>context(e,'edge',n.id)} onNodeClick={(_,n)=>select({kind:'node',id:n.id})} onEdgeClick={(_,e)=>select({kind:'edge',id:e.id})} onPaneClick={()=>{select(null);setMenu(null);setQuick(null)}} onNodeDrag={(_,n)=>mutate(m=>{const x=m.nodes.find(v=>v.id===n.id);if(x)x.position=n.position},false)} onNodeDragStop={(_,n)=>mutate(m=>{const x=m.nodes.find(v=>v.id===n.id);if(x)x.position=n.position})} selectionMode={SelectionMode.Partial} panOnScroll fitView snapToGrid snapGrid={[10,10]}><Background gap={20}/><Controls/><MiniMap pannable zoomable/></ReactFlow>{selectedIds.length>1&&<div className="align-toolbar"><span>{selectedIds.length} selected</span>{['left','right','top','bottom','hspace','vspace'].map(a=><button key={a} onClick={()=>align(a)}>{a}</button>)}</div>}{!model?.nodes.length&&<div className="canvas-empty"><div><Plus/><strong>Start modeling your system</strong><span>Drag a component onto the canvas or double-click anywhere to create one.</span></div></div>}{quick&&<div className="quick-menu" style={{left:quick.x-(wrap.current?.getBoundingClientRect().left||0),top:quick.y-(wrap.current?.getBoundingClientRect().top||0)}}><Create point={quick.flow} done={()=>setQuick(null)}/></div>}{menu&&<div className="context-menu" style={{left:menu.x,top:menu.y}}>{menu.kind==='canvas'?<><Create point={menu.flow} done={()=>setMenu(null)}/><button onClick={()=>rf.fitView()}>Fit view</button></>:<>{menu.kind==='node'&&<><button onClick={()=>{useStore.getState().duplicate();setMenu(null)}}>Duplicate</button><button onClick={()=>mutate(m=>{const n=m.nodes.find(x=>x.id===menu.id);if(n)n.zIndex=(n.zIndex||0)+1})}>Bring forward</button><button onClick={()=>mutate(m=>{const n=m.nodes.find(x=>x.id===menu.id);if(n)n.zIndex=(n.zIndex||0)-1})}>Send backward</button></>}{menu.kind==='edge'&&<button onClick={()=>{mutate(m=>{const e=m.edges.find(x=>x.id===menu.id);if(e)[e.source,e.target]=[e.target,e.source]});setMenu(null)}}>Reverse direction</button>}<button className="danger" onClick={()=>{useStore.getState().deleteSelection();setMenu(null)}}>Delete</button></>}</div>}</div>}
-function Create({point,done}:{point:{x:number;y:number};done:()=>void}){const add=useStore(s=>s.addNode);return <>{(['process','external','store','boundary']as ElementType[]).map(t=><button key={t} onClick={()=>{add(t,point);done()}}>Add {t==='store'?'Data Store':t==='external'?'External Entity':t==='boundary'?'Trust Boundary':'Process'}</button>)}</>}
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  MarkerType,
+  SelectionMode,
+  useReactFlow,
+  type Connection,
+  type Edge,
+  type Node,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { AtlasNodeView } from "./Nodes";
+import { FlowEdge } from "./FlowEdge";
+import { useStore } from "../state";
+import type { ElementType } from "../domain";
+import { Plus } from "lucide-react";
+const nodeTypes = { atlas: AtlasNodeView },
+  edgeTypes = { flow: FlowEdge };
+type Menu = {
+  x: number;
+  y: number;
+  kind: "canvas" | "node" | "edge";
+  id?: string;
+  flow: { x: number; y: number };
+};
+export function Canvas() {
+  const { model, selection, select, mutate, addNode, addEdge } = useStore(),
+    wrap = useRef<HTMLDivElement>(null),
+    lastEdgeClick = useRef<{
+      id: string;
+      at: number;
+      x: number;
+      y: number;
+    } | null>(null),
+    [quick, setQuick] = useState<{
+      x: number;
+      y: number;
+      flow: { x: number; y: number };
+    } | null>(null),
+    [menu, setMenu] = useState<Menu | null>(null),
+    [selectedIds, setSelectedIds] = useState<string[]>([]),
+    rf = useReactFlow();
+  useEffect(() => {
+    const closeMenus = () => {
+      setMenu(null);
+      setQuick(null);
+    };
+    document.addEventListener("atlas:close-canvas-menu", closeMenus);
+    return () => document.removeEventListener("atlas:close-canvas-menu", closeMenus);
+  }, []);
+  useEffect(() => {
+    let suppressDoubleClickUntil = 0;
+    const click = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const target = event.target as Element;
+      if (target.closest(".waypoint-svg-handle")) return;
+      const label = target.closest("[data-edge-id]"),
+        group = target.closest(".react-flow__edge"),
+        previous = lastEdgeClick.current,
+        now = performance.now();
+      let id =
+        label?.getAttribute("data-edge-id") ||
+        group?.getAttribute("data-testid")?.replace("rf__edge-", "");
+      const closeToPrevious =
+        previous &&
+        now - previous.at <= 500 &&
+        Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 8;
+      if (!id && closeToPrevious && target.closest(".react-flow__pane"))
+        id = previous.id;
+      if (!id) {
+        lastEdgeClick.current = null;
+        return;
+      }
+      lastEdgeClick.current = {
+        id,
+        at: now,
+        x: event.clientX,
+        y: event.clientY,
+      };
+      if (!previous || previous.id !== id || !closeToPrevious) return;
+      event.preventDefault();
+      event.stopPropagation();
+      lastEdgeClick.current = null;
+      suppressDoubleClickUntil = now + 100;
+      const point = rf.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      mutate((m) => {
+        const edge = m.edges.find((x) => x.id === id);
+        if (edge) edge.waypoints = [...(edge.waypoints || []), point];
+      });
+      select({ kind: "edge", id });
+    };
+    const doubleClick = (event: MouseEvent) => {
+      if (performance.now() < suppressDoubleClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    document.addEventListener("click", click, true);
+    document.addEventListener("dblclick", doubleClick, true);
+    return () => {
+      document.removeEventListener("click", click, true);
+      document.removeEventListener("dblclick", doubleClick, true);
+    };
+  }, [rf, mutate, select]);
+  const nodes = useMemo<Node[]>(
+    () =>
+      model?.nodes.map((n) => ({
+        id: n.id,
+        type: "atlas",
+        className: `flow-node-${n.type}`,
+        dragHandle: n.type === "boundary" ? ".node-copy" : undefined,
+        position: n.position,
+        width: n.size?.width,
+        height: n.size?.height,
+        style: {
+          width: n.size?.width || (n.type === "boundary" ? 440 : 190),
+          height: n.size?.height || (n.type === "boundary" ? 280 : 82),
+        },
+        data: {
+          atlas: n,
+          threats: model.threats.filter((t) => t.elementId === n.id),
+        },
+        selected: selection?.kind === "node" && selection.id === n.id,
+        zIndex: n.zIndex ?? (n.type === "boundary" ? -10 : 1),
+      })) || [],
+    [model, selection],
+  );
+  const edges = useMemo<Edge[]>(
+    () =>
+      model?.edges.map((e) => {
+        const danger = model.threats.some(
+            (t) => t.elementId === e.id && t.status === "open",
+          ),
+          active = selection?.kind === "edge" && selection.id === e.id;
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          label: e.label,
+          type: "flow",
+          data: {
+            waypoints: e.waypoints || [],
+            routing: e.routing,
+            label: e.label,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: active ? "#2563eb" : danger ? "#dc2626" : undefined,
+          },
+          selected: active,
+          style: {
+            strokeWidth: active ? 3 : danger ? 2.6 : 2,
+            stroke: active ? "#2563eb" : danger ? "#dc2626" : undefined,
+          },
+          labelStyle: {
+            fontSize: 12,
+            fontWeight: 600,
+            fill: active ? "#2563eb" : danger ? "#b91c1c" : undefined,
+          },
+        };
+      }) || [],
+    [model, selection],
+  );
+  const connect = useCallback(
+    (c: Connection) => {
+      if (c.source && c.target) addEdge(c.source, c.target);
+    },
+    [addEdge],
+  );
+  const context = (e: React.MouseEvent, kind: Menu["kind"], id?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (id) select({ kind: kind === "node" ? "node" : "edge", id });
+    setMenu({
+      x: e.clientX - (wrap.current?.getBoundingClientRect().left || 0),
+      y: e.clientY - (wrap.current?.getBoundingClientRect().top || 0),
+      flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+      kind,
+      id,
+    });
+  };
+  const align = (axis: string) => {
+    if (selectedIds.length < 2) return;
+    mutate((m) => {
+      const ns = m.nodes.filter((n) => selectedIds.includes(n.id)),
+        horizontal = axis === "left" || axis === "right";
+      if (["left", "right", "top", "bottom"].includes(axis)) {
+        const vals = ns.map((n) =>
+            horizontal
+              ? n.position.x + (axis === "right" ? n.size?.width || 190 : 0)
+              : n.position.y + (axis === "bottom" ? n.size?.height || 82 : 0),
+          ),
+          v =
+            axis === "left" || axis === "top"
+              ? Math.min(...vals)
+              : Math.max(...vals);
+        ns.forEach((n) => {
+          if (horizontal)
+            n.position.x = v - (axis === "right" ? n.size?.width || 190 : 0);
+          else
+            n.position.y = v - (axis === "bottom" ? n.size?.height || 82 : 0);
+        });
+      } else {
+        const h = axis === "hspace",
+          sorted = [...ns].sort(
+            (a, b) =>
+              (h ? a.position.x : a.position.y) -
+              (h ? b.position.x : b.position.y),
+          ),
+          first = h ? sorted[0].position.x : sorted[0].position.y,
+          last = h ? sorted.at(-1)!.position.x : sorted.at(-1)!.position.y;
+        sorted.forEach((n, i) => {
+          if (h)
+            n.position.x = first + ((last - first) * i) / (sorted.length - 1);
+          else
+            n.position.y = first + ((last - first) * i) / (sorted.length - 1);
+        });
+      }
+    });
+  };
+  return (
+    <div
+      className="canvas"
+      ref={wrap}
+      onContextMenu={(e) => context(e, "canvas")}
+      onDoubleClick={(e) => {
+        if ((e.target as HTMLElement).classList.contains("react-flow__pane"))
+          setQuick({
+            x: e.clientX,
+            y: e.clientY,
+            flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+          });
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        const t = e.dataTransfer.getData("atlas/type") as ElementType;
+        if (t)
+          addNode(t, rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+      }}
+      onDragOver={(e) => e.preventDefault()}
+    >
+      <ReactFlow
+        elevateNodesOnSelect={false}
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onConnect={connect}
+        onSelectionChange={(s) =>
+          setSelectedIds((old) => {
+            const next = s.nodes.map((n) => n.id);
+            return old.join("|") === next.join("|") ? old : next;
+          })
+        }
+        onNodeContextMenu={(e, n) => context(e, "node", n.id)}
+        onEdgeContextMenu={(e, n) => context(e, "edge", n.id)}
+        onNodeClick={(_, n) => select({ kind: "node", id: n.id })}
+        onEdgeClick={(_, e) => select({ kind: "edge", id: e.id })}
+        onPaneClick={() => {
+          select(null);
+          setMenu(null);
+          setQuick(null);
+        }}
+        onNodeDrag={(_, n) =>
+          mutate((m) => {
+            const x = m.nodes.find((v) => v.id === n.id);
+            if (x) x.position = n.position;
+          }, false)
+        }
+        onNodeDragStop={(_, n) =>
+          mutate((m) => {
+            const x = m.nodes.find((v) => v.id === n.id);
+            if (x) x.position = n.position;
+          })
+        }
+        selectionMode={SelectionMode.Partial}
+        panOnScroll
+        fitView
+        snapToGrid
+        snapGrid={[10, 10]}
+      >
+        <Background gap={20} />
+        <Controls />
+        <MiniMap pannable zoomable />
+      </ReactFlow>
+      {selectedIds.length > 1 && (
+        <div className="align-toolbar">
+          <span>{selectedIds.length} selected</span>
+          {["left", "right", "top", "bottom", "hspace", "vspace"].map((a) => (
+            <button key={a} onClick={() => align(a)}>
+              {a}
+            </button>
+          ))}
+        </div>
+      )}
+      {!model?.nodes.length && (
+        <div className="canvas-empty">
+          <div>
+            <Plus />
+            <strong>Start modeling your system</strong>
+            <span>
+              Drag a component onto the canvas or double-click anywhere to
+              create one.
+            </span>
+          </div>
+        </div>
+      )}
+      {quick && (
+        <div
+          className="quick-menu"
+          style={{
+            left: quick.x - (wrap.current?.getBoundingClientRect().left || 0),
+            top: quick.y - (wrap.current?.getBoundingClientRect().top || 0),
+          }}
+        >
+          <Create point={quick.flow} done={() => setQuick(null)} />
+        </div>
+      )}
+      {menu && (
+        <div className="context-menu" style={{ left: menu.x, top: menu.y }}>
+          {menu.kind === "canvas" ? (
+            <>
+              <Create point={menu.flow} done={() => setMenu(null)} />
+              <button onClick={() => rf.fitView()}>Fit view</button>
+            </>
+          ) : (
+            <>
+              {menu.kind === "node" && (
+                <>
+                  <button
+                    onClick={() => {
+                      useStore.getState().duplicate();
+                      setMenu(null);
+                    }}
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={() =>
+                      mutate((m) => {
+                        const n = m.nodes.find((x) => x.id === menu.id);
+                        if (n) n.zIndex = (n.zIndex || 0) + 1;
+                      })
+                    }
+                  >
+                    Bring forward
+                  </button>
+                  <button
+                    onClick={() =>
+                      mutate((m) => {
+                        const n = m.nodes.find((x) => x.id === menu.id);
+                        if (n) n.zIndex = (n.zIndex || 0) - 1;
+                      })
+                    }
+                  >
+                    Send backward
+                  </button>
+                </>
+              )}
+              {menu.kind === "edge" && (
+                <button
+                  onClick={() => {
+                    mutate((m) => {
+                      const e = m.edges.find((x) => x.id === menu.id);
+                      if (e) [e.source, e.target] = [e.target, e.source];
+                    });
+                    setMenu(null);
+                  }}
+                >
+                  Reverse direction
+                </button>
+              )}
+              <button
+                className="danger"
+                onClick={() => {
+                  useStore.getState().deleteSelection();
+                  setMenu(null);
+                }}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+function Create({
+  point,
+  done,
+}: {
+  point: { x: number; y: number };
+  done: () => void;
+}) {
+  const add = useStore((s) => s.addNode);
+  return (
+    <>
+      {(["process", "external", "store", "boundary"] as ElementType[]).map(
+        (t) => (
+          <button
+            key={t}
+            onClick={() => {
+              add(t, point);
+              done();
+            }}
+          >
+            Add{" "}
+            {t === "store"
+              ? "Data Store"
+              : t === "external"
+                ? "External Entity"
+                : t === "boundary"
+                  ? "Trust Boundary"
+                  : "Process"}
+          </button>
+        ),
+      )}
+    </>
+  );
+}

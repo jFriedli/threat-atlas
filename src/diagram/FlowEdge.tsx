@@ -1,5 +1,5 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, useReactFlow, type EdgeProps } from '@xyflow/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../state'
 
 type Point = { x: number; y: number }
@@ -34,7 +34,9 @@ export function FlowEdge(p: EdgeProps) {
   let path: string, labelX: number, labelY: number
   if (points.length) {
     path = routed(all, d.routing || 'smoothstep')
-    const mid = all[Math.floor(all.length / 2)]; labelX = mid.x; labelY = mid.y
+    const segment = all.slice(0, -1).map((start, index) => ({ start, end: all[index + 1], length: Math.hypot(all[index + 1].x - start.x, all[index + 1].y - start.y) })).sort((a, b) => b.length - a.length)[0]
+    labelX = (segment.start.x + segment.end.x) / 2
+    labelY = (segment.start.y + segment.end.y) / 2 - 28
   } else {
     const fn = d.routing === 'straight' ? getStraightPath : d.routing === 'bezier' ? getBezierPath : getSmoothStepPath
     ;[path, labelX, labelY] = fn({ sourceX: p.sourceX, sourceY: p.sourceY, targetX: p.targetX, targetY: p.targetY, sourcePosition: p.sourcePosition, targetPosition: p.targetPosition })
@@ -83,16 +85,25 @@ export function FlowEdge(p: EdgeProps) {
     setRoutingMenu(null)
   }
 
+  useEffect(() => {
+    const closeOtherMenu = (event: MouseEvent) => {
+      const owner = (event.target as Element).closest('[data-waypoint-edge-id]')?.getAttribute('data-waypoint-edge-id')
+      if (owner !== p.id) setRoutingMenu(null)
+    }
+    document.addEventListener('contextmenu', closeOtherMenu, true)
+    return () => document.removeEventListener('contextmenu', closeOtherMenu, true)
+  }, [p.id])
+
   return <>
     <BaseEdge id={p.id} path={path} markerEnd={p.markerEnd} style={p.style} interactionWidth={22} />
     <path d={path} className={`waypoint-hitarea${points.length ? ' has-waypoints' : ''}`} />
-    {points.map((point, i) => <circle key={i} role="button" tabIndex={0} aria-label={`Move waypoint ${i + 1}`} className={`waypoint-svg-handle nodrag nopan${p.selected ? ' selected' : ''}`} cx={point.x} cy={point.y} r={7}
+    {points.map((point, i) => <circle key={i} data-waypoint-edge-id={p.id} role="button" tabIndex={0} aria-label={`Move waypoint ${i + 1}`} className={`waypoint-svg-handle nodrag nopan${p.selected ? ' selected' : ''}`} cx={point.x} cy={point.y} r={7}
       onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); removeWaypoint(i) }}
-      onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setRoutingMenu(i) }}
+      onContextMenu={event => { event.preventDefault(); event.stopPropagation(); document.dispatchEvent(new Event('atlas:close-canvas-menu')); setRoutingMenu(i) }}
       onPointerDown={event => startDrag(event, i)} />)}
     <EdgeLabelRenderer>
       <div data-edge-id={p.id} className={`flow-label nodrag nopan${points.length ? ' has-waypoints' : ''}`} style={{ transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`, color: p.labelStyle?.fill as string }}>{d.label}</div>
-      {routingMenu !== null && points[routingMenu] && <div className="waypoint-menu nodrag nopan" style={{ transform: `translate(10px,10px) translate(${points[routingMenu].x}px,${points[routingMenu].y}px)` }}>
+      {routingMenu !== null && points[routingMenu] && <div data-waypoint-edge-id={p.id} className="waypoint-menu nodrag nopan" style={{ transform: `translate(10px,10px) translate(${points[routingMenu].x}px,${points[routingMenu].y}px)` }}>
         {([['smoothstep', 'Orthogonal'], ['bezier', 'Smooth'], ['straight', 'Straight']] as const).map(([mode, name]) => <button key={mode} className={d.routing === mode ? 'active' : ''} onClick={() => { update(edge => edge.routing = mode, true); setRoutingMenu(null) }}>{name}</button>)}
         <button className="danger" onClick={() => removeWaypoint(routingMenu)}>Delete waypoint</button>
       </div>}
