@@ -72,4 +72,5 @@ test('adds, moves, routes, removes, and persists canvas waypoints', async ({ pag
   await expect(page.getByRole('button', { name: 'Move waypoint 1' })).toHaveCount(0)
   await page.locator('.react-flow__pane').dblclick({ position: { x: 30, y: 30 } })
   await expect(viewport).toHaveAttribute('style', transformBeforeRemoval!)
+  await expect(page.locator('.quick-menu')).toHaveCount(0)
 })

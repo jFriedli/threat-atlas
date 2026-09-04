@@ -35,18 +35,12 @@ export function Canvas() {
       x: number;
       y: number;
     } | null>(null),
-    [quick, setQuick] = useState<{
-      x: number;
-      y: number;
-      flow: { x: number; y: number };
-    } | null>(null),
     [menu, setMenu] = useState<Menu | null>(null),
     [selectedIds, setSelectedIds] = useState<string[]>([]),
     rf = useReactFlow();
   useEffect(() => {
     const closeMenus = () => {
       setMenu(null);
-      setQuick(null);
     };
     document.addEventListener("atlas:close-canvas-menu", closeMenus);
     return () => document.removeEventListener("atlas:close-canvas-menu", closeMenus);
@@ -229,14 +223,6 @@ export function Canvas() {
       className="canvas"
       ref={wrap}
       onContextMenu={(e) => context(e, "canvas")}
-      onDoubleClick={(e) => {
-        if ((e.target as HTMLElement).classList.contains("react-flow__pane"))
-          setQuick({
-            x: e.clientX,
-            y: e.clientY,
-            flow: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }),
-          });
-      }}
       onDrop={(e) => {
         e.preventDefault();
         const t = e.dataTransfer.getData("atlas/type") as ElementType;
@@ -265,7 +251,6 @@ export function Canvas() {
         onPaneClick={() => {
           select(null);
           setMenu(null);
-          setQuick(null);
         }}
         onNodeDrag={(_, n) =>
           mutate((m) => {
@@ -306,21 +291,9 @@ export function Canvas() {
             <Plus />
             <strong>Start modeling your system</strong>
             <span>
-              Drag a component onto the canvas or double-click anywhere to
-              create one.
+              Click or drag a component from the palette to create one.
             </span>
           </div>
-        </div>
-      )}
-      {quick && (
-        <div
-          className="quick-menu"
-          style={{
-            left: quick.x - (wrap.current?.getBoundingClientRect().left || 0),
-            top: quick.y - (wrap.current?.getBoundingClientRect().top || 0),
-          }}
-        >
-          <Create point={quick.flow} done={() => setQuick(null)} />
         </div>
       )}
       {menu && (
