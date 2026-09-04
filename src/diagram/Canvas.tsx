@@ -281,6 +281,7 @@ export function Canvas() {
         }
         selectionMode={SelectionMode.Partial}
         panOnScroll
+        zoomOnDoubleClick={false}
         fitView
         snapToGrid
         snapGrid={[10, 10]}
