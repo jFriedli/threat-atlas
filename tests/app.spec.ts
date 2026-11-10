@@ -74,3 +74,22 @@ test('adds, moves, routes, removes, and persists canvas waypoints', async ({ pag
   await expect(viewport).toHaveAttribute('style', transformBeforeRemoval!)
   await expect(page.locator('.quick-menu')).toHaveCount(0)
 })
+
+test('imports Threat Dragon JSON and downloads an editable Threat Dragon model', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('input[type="file"]').setInputFiles('tests/fixtures/threat-dragon-v2.json')
+  await expect(page.getByRole('status')).toContainText('Imported 1 model')
+  await page.getByRole('button', { name: /Demo Threat Model \(imported\)/ }).click()
+  await expect(page.locator('.react-flow__node').getByText('Worker Config', { exact:true })).toBeVisible()
+  await page.locator('.top-actions details summary').click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name:'Threat Dragon JSON', exact:true }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/-threat-dragon\.json$/)
+  const stream = await download.createReadStream()
+  let json = ''
+  for await (const chunk of stream!) json += chunk.toString()
+  const doc = JSON.parse(json)
+  expect(doc.version).toMatch(/^2\./)
+  expect(doc.detail.diagrams[0].cells.some((c:{shape:string}) => c.shape === 'trust-boundary-curve')).toBe(true)
+})

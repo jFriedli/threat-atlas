@@ -1,3 +1,4 @@
+import { toThreatDragon } from './threatDragon'
 import type { ThreatModel } from './domain'; import { risk } from './domain'; import { stride } from './methodology'; import { toPng,toSvg } from 'html-to-image'
 export function download(name:string,content:BlobPart,type:string){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 const safe=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'threat-model'
@@ -6,3 +7,5 @@ export function report(m:ThreatModel){const element=(id:string)=>m.nodes.find(n=
 export const exportReport=(m:ThreatModel)=>download(`${safe(m.name)}-report.md`,report(m),'text/markdown')
 export async function exportPng(m:ThreatModel){const el=document.querySelector('.react-flow') as HTMLElement|null;if(!el)throw new Error('Diagram is not visible');const data=await toPng(el,{pixelRatio:2,backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--panel2').trim()||'#f8fafc'});const a=document.createElement('a');a.href=data;a.download=`${safe(m.name)}-diagram.png`;a.click()}
 export async function exportSvg(m:ThreatModel){const el=document.querySelector('.react-flow') as HTMLElement|null;if(!el)throw new Error('Diagram is not visible');const data=await toSvg(el,{backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--panel2').trim()||'#f8fafc'});const a=document.createElement('a');a.href=data;a.download=`${safe(m.name)}-diagram.svg`;a.click()}
+
+export const exportThreatDragon=(m:ThreatModel)=>download(`${safe(m.name)}-threat-dragon.json`,JSON.stringify(toThreatDragon(m),null,2),'application/json')

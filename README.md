@@ -58,3 +58,33 @@ Planned extension points include custom methodologies, LINDDUN, reusable threat 
 ## License
 
 MIT
+
+### Threat Dragon interchange
+
+Use **Import JSON** on the dashboard to open Threat Atlas JSON or OWASP Threat
+Dragon 1.x/2.x STRIDE JSON. Use **Export → Threat Dragon JSON** in the editor (or
+**Export Threat Dragon JSON** in a model's dashboard menu) to download a 2.x file
+that can be opened in Threat Dragon.
+
+Components, trust boundary boxes, connected data flows, positions, sizes, labels,
+descriptions, protocols, threats, mitigations and supported statuses are mapped.
+Atlas-only fields are included in `threatAtlas` extensions so Atlas can restore
+them when reimporting. Snapshot history is excluded from Threat Dragon exports.
+Threat Dragon severity imports as impact rating with likelihood unset; Atlas
+exports calculated risk when available, otherwise impact rating or TBD.
+
+Each diagram in a multi-diagram file becomes a separate Atlas model. Exporting
+one of these models updates its diagram and retains the other original diagrams;
+it does not merge edits made in the separately imported sibling models.
+
+Curved trust boundaries, text annotations and flows with unattached endpoints
+are preserved in the imported source and exported again, but are not editable or
+visible on the Atlas canvas. Import shows a notice for these cases. Source data
+also survives native Atlas JSON exports and browser storage. Unsupported threat
+statuses display as Open and retain their original export value until changed.
+Non-STRIDE diagrams and unknown threat categories are rejected with an error.
+Threats must be assigned to an element to export to Threat Dragon. Extensions
+can only be restored if the other application retains them when saving.
+
+The adapter follows OWASP's [Threat Dragon schemas](https://github.com/OWASP/threat-dragon/tree/main/td.vue/src/assets/schema)
+and is tested against its official 2.x demo model.
